@@ -1,6 +1,3 @@
-# Adapted from https://www.scikit-yb.org/en/latest/api/cluster/silhouette.html#silhouette-visualizer
-# This visualiation follows the documentation in the link above, with some changes to use pyclustering models instead of sklearn models.
-# All inheritances removed
 
 import numpy as np
 import matplotlib.ticker as ticker
@@ -13,6 +10,13 @@ from matplotlib import pyplot as plt
 
 
 class silhouette_visualizer():
+    
+    """
+    Draw visualiation for silhouette metric.
+    Adapted from https://www.scikit-yb.org/en/latest/api/cluster/silhouette.html#silhouette-visualizer
+    This visualiation follows the documentation in the link above, with some changes to use pyclustering models instead of sklearn models.
+    All inheritances removed
+    """
 
     def __init__(self, X, model, name='', colors=None, **kwargs):
 
@@ -22,10 +26,15 @@ class silhouette_visualizer():
             
         # Get the properties of the dataset
         self.n_samples_ = X.shape[0]
-        self.n_clusters_ = len(model.get_clusters())
 
         # Compute the scores of the cluster
-        labels = model.predict(X)
+        try:
+            labels = model.labels_
+            self.n_clusters_ = len(set(labels))
+        except AttributeError:
+            labels = model.predict(X)
+            self.n_clusters_ = len(model.get_clusters())
+                
         self.silhouette_score_ = silhouette_score(X, labels)
         self.silhouette_samples_ = silhouette_samples(X, labels)
         

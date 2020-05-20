@@ -2,18 +2,22 @@ import pandas as pd
 import os
 from yellowbrick.cluster import KElbowVisualizer
 from silhouette import silhouette_visualizer
-from sklearn.cluster import KMeans
+from sklearn.cluster import KMeans, Birch, DBSCAN
+from sklearn import cluster as sk_cluster
 from sklearn.feature_selection import VarianceThreshold
 from sklearn.decomposition import PCA, KernelPCA
 from sklearn.preprocessing import StandardScaler
 from sklearn.discriminant_analysis import LinearDiscriminantAnalysis
-from sklearn.metrics import fowlkes_mallows_score
+from sklearn.metrics import fowlkes_mallows_score, silhouette_score
 from tensorflow.keras.layers import Input, Dense
 from tensorflow.keras.models import load_model
 from tensorflow.keras import Model
 import numpy as np
 from matplotlib import pyplot as plt
 import seaborn as sns
+
+from pyclustering.cluster.center_initializer import kmeans_plusplus_initializer 
+from pyclustering.cluster.xmeans import xmeans
 
 
 def get_path(path='dataset'):
@@ -227,6 +231,10 @@ from tensorflow.keras import Model
 
 def generate_representation(X, train=True, path='', names=['encoder', 'autoencoder'], encoding_dim=20, batch=None, epochs=100, split=0.05, verbose=0):
     
+    """
+    Generate representations for the Features Matrix by applying an Autoencoder Neural Network
+    """
+    
     X = np.array(X)
     names = list(names)
     
@@ -307,11 +315,15 @@ def labeled_metrics(X, y, model):
     """
 
     np.set_printoptions(precision=2)
-    labels = model.predict(X)
+    
+    try:
+        labels = model.labels_
+    except AttributeError:
+        labels = model.predict(X)
 
     return(get_cm(y, labels), round(fowlkes_mallows_score(y, labels), 3))
 
-def unlabeled_metrics(X, model, name=''):
+def unlabeled_metrics(X, model, n, name=''):
     """
     Metrics for unsupervised clustering
 
@@ -319,15 +331,33 @@ def unlabeled_metrics(X, model, name=''):
     :param model: object, clustering algorithm
     :return: silhouette fowlkes mallows score and plot
     """
-    visualizer = silhouette_visualizer(X, model, name, colors='yellowbrick')
-    visualizer.show()
     
-    return round(visualizer.silhouette_score_, 3)
+    if n <= 10:
+        visualizer = silhouette_visualizer(X, model, name, colors='yellowbrick')
+        visualizer.show()
+        silhouette_score_ = visualizer.silhouette_score_
+    else:
+        print('')
+        print('Too many cluster for accurate visualization')
+        try:
+            labels = model.labels_
+        except AttributeError:
+            labels = model.predict(X)
+        silhouette_score_ = silhouette_score(X, labels)
+    
+    return round(silhouette_score_, 3)
 
-def get_k(X, model=None, _range=(1,15), metric='distortion', timings=False):
+def get_k(X, model=None, _range=(1,15), metric='distortion', timings=False, model_str=None):
+    
+    """
+    Plot Elbow Method Visualizer
+    """
     
     if not model:
-        model = KMeans()
+        if not model_str:
+            model = KMeans()
+        else:
+            model = getattr(sk_cluster, model_str)()
     
     visualizer = KElbowVisualizer(
         model=model, 
@@ -338,32 +368,84 @@ def get_k(X, model=None, _range=(1,15), metric='distortion', timings=False):
     
     visualizer.fit(X)
     visualizer.show()
-    
-from pyclustering.cluster.center_initializer import kmeans_plusplus_initializer 
-from pyclustering.cluster import cluster_visualizer_multidim
-from pyclustering.cluster.xmeans import xmeans
 
-def clustering(X, y, method, centers):
+def clustering(X, y, **kwargs):
     
-    method = str(method)
-    amount_centers = int(centers)
+    """
+    Main Clustering pipeline apply clustering with different algorithms
+    """
     
-    if method == 'Xmeans':
+    # Not the best implementation in terms of readability
+    # But it works !! :)
+    
+    X = list(X)
+    y = list(y)
+    
+    Xmeans_args = kwargs.get('Xmeans')
+    BIRCH_args = kwargs.get('BIRCH')
+    DBSCAN_args = kwargs.get('DBSCAN')
+    
+    
+    if Xmeans_args:
+        
+        method = 'Xmeans'
+        
+        Xmeans_args = dict(Xmeans_args)
+        amount_centers = int(Xmeans_args['amount_centers'])
     
         # generate centers
         initializer = kmeans_plusplus_initializer(X, amount_centers).initialize()
         # Train X-Means Model
-        xmeans_instance = xmeans(list(X), initializer, 20)
-        xmeans_instance.process()
-        # Extract results
-        clusters = xmeans_instance.get_clusters()
+        model_instance = xmeans(X, initializer, 20)
+        model_instance.process()
+        
+        # Get Clusters
+        clusters = model_instance.get_clusters()
         print("{} Clusters Generated".format(len(clusters)))
         # Print total sum of metric errors
-        print("Total WCE: {}".format(round(xmeans_instance.get_total_wce(), 2)))
+        print("Total WCE: {}".format(round(model_instance.get_total_wce(), 2)))
+    
+    elif BIRCH_args:
+        
+        method = 'BIRCH'
+        
+        BIRCH_args = dict(BIRCH_args)
+        try:
+            number_clusters = int(BIRCH_args['number_clusters'])
+        except KeyError:
+            number_clusters = None
+        try:
+            diameter = float(BIRCH_args['diameter'])
+        except KeyError:
+            diameter = 0.5
+            
+        # Train BIRCH Model
+        model_instance = Birch(n_clusters=number_clusters, threshold=diameter).fit(X)
+        
+        clusters = set(model_instance.labels_)
+        print("{} Clusters Generated".format(len(clusters)))
+        
+    elif DBSCAN_args:
+        
+        method = 'DBSCAN'
+        
+        DBSCAN_args = dict(DBSCAN_args)
+        eps = float(DBSCAN_args['eps'])
+        neighbors = int(DBSCAN_args['neighbors'])
+        
+        # Train DBSCAN Model
+        model_instance = DBSCAN(eps=eps, min_samples=neighbors).fit(X)
+        
+        clusters = set(model_instance.labels_)
+        print("{} Clusters Generated".format(len(clusters)))
+        
+    X = np.array(X)
+    y = np.array(y)
         
     # Unsupervised Metrics 
         
-    score = unlabeled_metrics(X, xmeans_instance, name=method)
+    score = unlabeled_metrics(X, model_instance, name=method, n=len(clusters))
+    print('')
     print("Unsupervised Metrics: ")
     print("")
     print("Silhouette Score: {} (between [-1,1])".format(score))
@@ -372,7 +454,7 @@ def clustering(X, y, method, centers):
     
     # Supervised Metrics
     
-    cm, score = labeled_metrics(X, y, xmeans_instance)
+    cm, score = labeled_metrics(X, y, model_instance)
     print('Supervised Metrics:')
     print('')
     print("Fowlkes Mallows Score: {} (between [0,1])".format(score))
