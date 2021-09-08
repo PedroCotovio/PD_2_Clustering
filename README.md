@@ -1,14 +1,7 @@
-# Cadeira: Prospeção de Dados
+# Data Mining FCUL 19/20 
 
-### 2º Projeto - Clustering
+This work was developed as part of FCUL's 2019/2020 edition of the [Data Mining course](https://fenix.ciencias.ulisboa.pt/courses/pdad-4-2254879305237547)
 
-#### Aluno: Pedro Giesteira Cotovio - Número: 55053
+### Clustering
 
-Resumo:
-
-O projeto é uma análise de 'Gene Expression Data' de pacientes de leucemia, disponível dentro da 
-diretoria `dataset`. A analise principal está no jupyter notebook `PD_201920_Project2`.
-Para facilitar a análise foi criada várias funções disponiveis no ficheiro `functions.py`, e 
-uma adaptação de um visualizador da biblioteca `YellowBrick`, disponível no ficheiro `silhouette.py`.
-Para reduzir o tempo que demora a correr o ficheiro o autoencoder foi pré-treinado e os modelos foram 
-gravados em duas diretorias `autoencoder`, `encoder`.
+#### Student: Pedro Giesteira Cotovio
